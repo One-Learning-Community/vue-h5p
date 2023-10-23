@@ -1,4 +1,4 @@
-"use strict";
+// "use strict";
 const h5p = "";
 const h5pConfirmationDialog = "";
 const h5pCoreButton = "";

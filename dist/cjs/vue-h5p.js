@@ -81,7 +81,7 @@ const l10n = {
     year: "Year"
   }
 };
-const frameScript = `"use strict";
+const frameScript = `// "use strict";
 const h5p = "";
 const h5pConfirmationDialog = "";
 const h5pCoreButton = "";
