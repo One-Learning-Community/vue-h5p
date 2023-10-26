@@ -6724,6 +6724,10 @@ const __vue2_script = {
       type: String,
       required: true
     },
+    contentId: {
+      type: String,
+      default: "default"
+    },
     embed: {
       type: String,
       default: ""
@@ -6835,7 +6839,7 @@ const __vue2_script = {
       },
       url: this.path,
       contents: {
-        "cid-default": {
+        [`cid-${this.contentId}`]: {
           embedCode: this.embed,
           resizeCode: this.resize,
           exportUrl: this.export,
@@ -6883,7 +6887,7 @@ const __vue2_script = {
     ${contentScripts}
   </head>
   <body>
-    <div class="h5p-content" data-content-id="default"/>
+    <div class="h5p-content" data-content-id="${this.contentId}"/>
   </body>
 </html>`;
   },

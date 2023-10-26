@@ -34,6 +34,10 @@ export default {
       type: String,
       required: true
     },
+    contentId: {
+      type: String,
+      default: 'default',
+    },
     embed: {
       type: String,
       default: ''
@@ -150,7 +154,7 @@ export default {
       },
       url: this.path,
       contents: {
-        'cid-default': {
+        [`cid-${this.contentId}`]: {
           embedCode: this.embed,
           resizeCode: this.resize,
           exportUrl: this.export,
@@ -201,7 +205,7 @@ export default {
     ${contentScripts}
   </head>
   <body>
-    <div class="h5p-content" data-content-id="default"/>
+    <div class="h5p-content" data-content-id="${this.contentId}"/>
   </body>
 </html>`
   },
