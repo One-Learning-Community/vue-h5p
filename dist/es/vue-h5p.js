@@ -2570,6 +2570,155 @@ H5P$4.init = function(target) {
       params: JSON.parse(contentData.jsonContent),
       metadata: contentData.metadata
     };
+    var completeInit = function() {
+      var instance2 = H5P$4.newRunnable(library, contentId, $container, true, { standalone: true });
+      H5P$4.offlineRequestQueue = new H5P$4.OfflineRequestQueue({ instance: instance2 });
+      if (contentData.fullScreen == 1 && H5P$4.fullscreenSupported) {
+        H5P$4.jQuery(
+          '<div class="h5p-content-controls"><div role="button" tabindex="0" class="h5p-enable-fullscreen" aria-label="' + H5P$4.t("fullscreen") + '" title="' + H5P$4.t("fullscreen") + '"></div></div>'
+        ).prependTo($container).children().click(function() {
+          H5P$4.fullScreen($container, instance2);
+        }).keydown(function(e) {
+          if (e.which === 32 || e.which === 13) {
+            H5P$4.fullScreen($container, instance2);
+            return false;
+          }
+        });
+      }
+      var displayOptions = contentData.displayOptions;
+      var displayFrame = false;
+      if (displayOptions.frame) {
+        if (displayOptions.copyright) {
+          var copyrights = H5P$4.getCopyrights(instance2, library.params, contentId, library.metadata);
+          if (!copyrights) {
+            displayOptions.copyright = false;
+          }
+        }
+        var actionBar = new H5P$4.ActionBar(displayOptions);
+        var $actions = actionBar.getDOMElement();
+        actionBar.on("reuse", function() {
+          H5P$4.openReuseDialog($actions, contentData, library, instance2, contentId);
+          instance2.triggerXAPI("accessed-reuse");
+        });
+        actionBar.on("copyrights", function() {
+          var dialog = new H5P$4.Dialog("copyrights", H5P$4.t("copyrightInformation"), copyrights, $container, $actions.find(".h5p-copyrights")[0]);
+          dialog.open(true);
+          instance2.triggerXAPI("accessed-copyright");
+        });
+        actionBar.on("embed", function() {
+          H5P$4.openEmbedDialog($actions, contentData.embedCode, contentData.resizeCode, {
+            width: $element.width(),
+            height: $element.height()
+          }, instance2);
+          instance2.triggerXAPI("accessed-embed");
+        });
+        if (actionBar.hasActions()) {
+          displayFrame = true;
+          $actions.insertAfter($container);
+        }
+      }
+      $element.addClass(displayFrame ? "h5p-frame" : "h5p-no-frame");
+      H5P$4.opened[contentId] = /* @__PURE__ */ new Date();
+      H5P$4.on(instance2, "finish", function(event) {
+        if (event.data !== void 0) {
+          H5P$4.setFinished(contentId, event.data.score, event.data.maxScore, event.data.time);
+        }
+      });
+      H5P$4.on(instance2, "xAPI", H5P$4.xAPICompletedListener);
+      if (H5PIntegration.saveFreq !== false && (instance2.getCurrentState instanceof Function || typeof instance2.getCurrentState === "function")) {
+        var saveTimer, save = function() {
+          var state = instance2.getCurrentState();
+          if (state !== void 0) {
+            H5P$4.setUserData(contentId, "state", state, { deleteOnChange: true });
+          }
+          if (H5PIntegration.saveFreq) {
+            saveTimer = setTimeout(save, H5PIntegration.saveFreq * 1e3);
+          }
+        };
+        if (H5PIntegration.saveFreq) {
+          saveTimer = setTimeout(save, H5PIntegration.saveFreq * 1e3);
+        }
+        H5P$4.on(instance2, "xAPI", function(event) {
+          var verb = event.getVerb();
+          if (verb === "completed" || verb === "progressed") {
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(save, 3e3);
+          }
+        });
+      }
+      if (H5P$4.isFramed) {
+        var resizeDelay;
+        if (H5P$4.externalEmbed === false) {
+          var iframe = window.frameElement;
+          var resizeIframe = function() {
+            if (window.parent.H5P.isFullscreen) {
+              return;
+            }
+            var parentHeight = iframe.parentElement.style.height;
+            iframe.parentElement.style.height = iframe.parentElement.clientHeight + "px";
+            iframe.getBoundingClientRect();
+            iframe.style.height = "1px";
+            iframe.style.height = iframe.contentDocument.body.scrollHeight + "px";
+            iframe.parentElement.style.height = parentHeight;
+          };
+          H5P$4.on(instance2, "resize", function() {
+            clearTimeout(resizeDelay);
+            resizeDelay = setTimeout(function() {
+              resizeIframe();
+            }, 1);
+          });
+        } else if (H5P$4.communicator) {
+          var parentIsFriendly = false;
+          H5P$4.communicator.on("ready", function() {
+            H5P$4.communicator.send("hello");
+          });
+          H5P$4.communicator.on("hello", function() {
+            parentIsFriendly = true;
+            document.body.style.height = "auto";
+            document.body.style.overflow = "hidden";
+            H5P$4.trigger(instance2, "resize");
+          });
+          H5P$4.communicator.on("resizePrepared", function() {
+            H5P$4.communicator.send("resize", {
+              scrollHeight: document.body.scrollHeight
+            });
+          });
+          H5P$4.communicator.on("resize", function() {
+            H5P$4.trigger(instance2, "resize");
+          });
+          H5P$4.on(instance2, "resize", function() {
+            if (H5P$4.isFullscreen) {
+              return;
+            }
+            clearTimeout(resizeDelay);
+            resizeDelay = setTimeout(function() {
+              if (parentIsFriendly) {
+                H5P$4.communicator.send("prepareResize", {
+                  scrollHeight: document.body.scrollHeight,
+                  clientHeight: document.body.clientHeight
+                });
+              } else {
+                H5P$4.communicator.send("hello");
+              }
+            }, 0);
+          });
+        }
+      }
+      if (!H5P$4.isFramed || H5P$4.externalEmbed === false) {
+        H5P$4.jQuery(window.parent).resize(function() {
+          H5P$4.trigger(instance2, "resize");
+        });
+      }
+      H5P$4.instances.push(instance2);
+      H5P$4.trigger(instance2, "resize");
+      $element.addClass("using-mouse");
+      $element.on("mousedown keydown keyup", function(event) {
+        $element.toggleClass("using-mouse", event.type === "mousedown");
+      });
+      if (H5P$4.externalDispatcher) {
+        H5P$4.externalDispatcher.trigger("initialized");
+      }
+    };
     H5P$4.getUserData(contentId, "state", function(err, previousState) {
       if (previousState) {
         library.userDatas = {
@@ -2592,154 +2741,8 @@ H5P$4.init = function(target) {
         });
         dialog.open();
       }
+      completeInit();
     });
-    var instance = H5P$4.newRunnable(library, contentId, $container, true, { standalone: true });
-    H5P$4.offlineRequestQueue = new H5P$4.OfflineRequestQueue({ instance });
-    if (contentData.fullScreen == 1 && H5P$4.fullscreenSupported) {
-      H5P$4.jQuery(
-        '<div class="h5p-content-controls"><div role="button" tabindex="0" class="h5p-enable-fullscreen" aria-label="' + H5P$4.t("fullscreen") + '" title="' + H5P$4.t("fullscreen") + '"></div></div>'
-      ).prependTo($container).children().click(function() {
-        H5P$4.fullScreen($container, instance);
-      }).keydown(function(e) {
-        if (e.which === 32 || e.which === 13) {
-          H5P$4.fullScreen($container, instance);
-          return false;
-        }
-      });
-    }
-    var displayOptions = contentData.displayOptions;
-    var displayFrame = false;
-    if (displayOptions.frame) {
-      if (displayOptions.copyright) {
-        var copyrights = H5P$4.getCopyrights(instance, library.params, contentId, library.metadata);
-        if (!copyrights) {
-          displayOptions.copyright = false;
-        }
-      }
-      var actionBar = new H5P$4.ActionBar(displayOptions);
-      var $actions = actionBar.getDOMElement();
-      actionBar.on("reuse", function() {
-        H5P$4.openReuseDialog($actions, contentData, library, instance, contentId);
-        instance.triggerXAPI("accessed-reuse");
-      });
-      actionBar.on("copyrights", function() {
-        var dialog = new H5P$4.Dialog("copyrights", H5P$4.t("copyrightInformation"), copyrights, $container, $actions.find(".h5p-copyrights")[0]);
-        dialog.open(true);
-        instance.triggerXAPI("accessed-copyright");
-      });
-      actionBar.on("embed", function() {
-        H5P$4.openEmbedDialog($actions, contentData.embedCode, contentData.resizeCode, {
-          width: $element.width(),
-          height: $element.height()
-        }, instance);
-        instance.triggerXAPI("accessed-embed");
-      });
-      if (actionBar.hasActions()) {
-        displayFrame = true;
-        $actions.insertAfter($container);
-      }
-    }
-    $element.addClass(displayFrame ? "h5p-frame" : "h5p-no-frame");
-    H5P$4.opened[contentId] = /* @__PURE__ */ new Date();
-    H5P$4.on(instance, "finish", function(event) {
-      if (event.data !== void 0) {
-        H5P$4.setFinished(contentId, event.data.score, event.data.maxScore, event.data.time);
-      }
-    });
-    H5P$4.on(instance, "xAPI", H5P$4.xAPICompletedListener);
-    if (H5PIntegration.saveFreq !== false && (instance.getCurrentState instanceof Function || typeof instance.getCurrentState === "function")) {
-      var saveTimer, save = function() {
-        var state = instance.getCurrentState();
-        if (state !== void 0) {
-          H5P$4.setUserData(contentId, "state", state, { deleteOnChange: true });
-        }
-        if (H5PIntegration.saveFreq) {
-          saveTimer = setTimeout(save, H5PIntegration.saveFreq * 1e3);
-        }
-      };
-      if (H5PIntegration.saveFreq) {
-        saveTimer = setTimeout(save, H5PIntegration.saveFreq * 1e3);
-      }
-      H5P$4.on(instance, "xAPI", function(event) {
-        var verb = event.getVerb();
-        if (verb === "completed" || verb === "progressed") {
-          clearTimeout(saveTimer);
-          saveTimer = setTimeout(save, 3e3);
-        }
-      });
-    }
-    if (H5P$4.isFramed) {
-      var resizeDelay;
-      if (H5P$4.externalEmbed === false) {
-        var iframe = window.frameElement;
-        var resizeIframe = function() {
-          if (window.parent.H5P.isFullscreen) {
-            return;
-          }
-          var parentHeight = iframe.parentElement.style.height;
-          iframe.parentElement.style.height = iframe.parentElement.clientHeight + "px";
-          iframe.getBoundingClientRect();
-          iframe.style.height = "1px";
-          iframe.style.height = iframe.contentDocument.body.scrollHeight + "px";
-          iframe.parentElement.style.height = parentHeight;
-        };
-        H5P$4.on(instance, "resize", function() {
-          clearTimeout(resizeDelay);
-          resizeDelay = setTimeout(function() {
-            resizeIframe();
-          }, 1);
-        });
-      } else if (H5P$4.communicator) {
-        var parentIsFriendly = false;
-        H5P$4.communicator.on("ready", function() {
-          H5P$4.communicator.send("hello");
-        });
-        H5P$4.communicator.on("hello", function() {
-          parentIsFriendly = true;
-          document.body.style.height = "auto";
-          document.body.style.overflow = "hidden";
-          H5P$4.trigger(instance, "resize");
-        });
-        H5P$4.communicator.on("resizePrepared", function() {
-          H5P$4.communicator.send("resize", {
-            scrollHeight: document.body.scrollHeight
-          });
-        });
-        H5P$4.communicator.on("resize", function() {
-          H5P$4.trigger(instance, "resize");
-        });
-        H5P$4.on(instance, "resize", function() {
-          if (H5P$4.isFullscreen) {
-            return;
-          }
-          clearTimeout(resizeDelay);
-          resizeDelay = setTimeout(function() {
-            if (parentIsFriendly) {
-              H5P$4.communicator.send("prepareResize", {
-                scrollHeight: document.body.scrollHeight,
-                clientHeight: document.body.clientHeight
-              });
-            } else {
-              H5P$4.communicator.send("hello");
-            }
-          }, 0);
-        });
-      }
-    }
-    if (!H5P$4.isFramed || H5P$4.externalEmbed === false) {
-      H5P$4.jQuery(window.parent).resize(function() {
-        H5P$4.trigger(instance, "resize");
-      });
-    }
-    H5P$4.instances.push(instance);
-    H5P$4.trigger(instance, "resize");
-    $element.addClass("using-mouse");
-    $element.on("mousedown keydown keyup", function(event) {
-      $element.toggleClass("using-mouse", event.type === "mousedown");
-    });
-    if (H5P$4.externalDispatcher) {
-      H5P$4.externalDispatcher.trigger("initialized");
-    }
   });
   H5P$4.jQuery("iframe.h5p-iframe:not(.h5p-initialized)", target).each(function() {
     const iframe = this;
@@ -2804,20 +2807,20 @@ H5P$4.communicator = function() {
   }
   return window.postMessage && window.addEventListener ? new Communicator() : void 0;
 }();
-H5P$4.semiFullScreen = function($element, instance, exitCallback, body) {
-  H5P$4.fullScreen($element, instance, exitCallback, body, true);
+H5P$4.semiFullScreen = function($element, instance2, exitCallback, body) {
+  H5P$4.fullScreen($element, instance2, exitCallback, body, true);
 };
-H5P$4.fullScreen = function($element, instance, exitCallback, body, forceSemiFullScreen) {
+H5P$4.fullScreen = function($element, instance2, exitCallback, body, forceSemiFullScreen) {
   if (H5P$4.exitFullScreen !== void 0) {
     return;
   }
   if (H5P$4.isFramed && H5P$4.externalEmbed === false) {
-    window.parent.H5P.fullScreen($element, instance, exitCallback, H5P$4.$body.get(), forceSemiFullScreen);
+    window.parent.H5P.fullScreen($element, instance2, exitCallback, H5P$4.$body.get(), forceSemiFullScreen);
     H5P$4.isFullscreen = true;
     H5P$4.exitFullScreen = function() {
       window.parent.H5P.exitFullScreen();
     };
-    H5P$4.on(instance, "exitFullScreen", function() {
+    H5P$4.on(instance2, "exitFullScreen", function() {
       H5P$4.isFullscreen = false;
       H5P$4.exitFullScreen = void 0;
     });
@@ -2842,20 +2845,20 @@ H5P$4.fullScreen = function($element, instance, exitCallback, body, forceSemiFul
     }
   };
   var entered = function() {
-    H5P$4.trigger(instance, "resize");
-    H5P$4.trigger(instance, "focus");
-    H5P$4.trigger(instance, "enterFullScreen");
+    H5P$4.trigger(instance2, "resize");
+    H5P$4.trigger(instance2, "focus");
+    H5P$4.trigger(instance2, "enterFullScreen");
   };
   var done = function(classes) {
     H5P$4.isFullscreen = false;
     $classes.removeClass(classes);
-    H5P$4.trigger(instance, "resize");
-    H5P$4.trigger(instance, "focus");
+    H5P$4.trigger(instance2, "resize");
+    H5P$4.trigger(instance2, "focus");
     H5P$4.exitFullScreen = void 0;
     if (exitCallback !== void 0) {
       exitCallback();
     }
-    H5P$4.trigger(instance, "exitFullScreen");
+    H5P$4.trigger(instance2, "exitFullScreen");
   };
   H5P$4.isFullscreen = true;
   if (H5P$4.fullScreenBrowserPrefix === void 0 || forceSemiFullScreen === true) {
@@ -3042,26 +3045,26 @@ H5P$4.newRunnable = function(library, contentId, $attachTo, skipResize, extras) 
   }
   var standalone = extras.standalone || false;
   constructor.prototype = H5P$4.jQuery.extend({}, H5P$4.ContentType(standalone).prototype, constructor.prototype);
-  var instance;
+  var instance2;
   if (H5P$4.jQuery.inArray(library.library, ["H5P.CoursePresentation 1.0", "H5P.CoursePresentation 1.1", "H5P.CoursePresentation 1.2", "H5P.CoursePresentation 1.3"]) > -1) {
-    instance = new constructor(library.params, contentId);
+    instance2 = new constructor(library.params, contentId);
   } else {
-    instance = new constructor(library.params, contentId, extras);
+    instance2 = new constructor(library.params, contentId, extras);
   }
-  if (instance.$ === void 0) {
-    instance.$ = H5P$4.jQuery(instance);
+  if (instance2.$ === void 0) {
+    instance2.$ = H5P$4.jQuery(instance2);
   }
-  if (instance.contentId === void 0) {
-    instance.contentId = contentId;
+  if (instance2.contentId === void 0) {
+    instance2.contentId = contentId;
   }
-  if (instance.subContentId === void 0 && library.subContentId) {
-    instance.subContentId = library.subContentId;
+  if (instance2.subContentId === void 0 && library.subContentId) {
+    instance2.subContentId = library.subContentId;
   }
-  if (instance.parent === void 0 && extras && extras.parent) {
-    instance.parent = extras.parent;
+  if (instance2.parent === void 0 && extras && extras.parent) {
+    instance2.parent = extras.parent;
   }
-  if (instance.libraryInfo === void 0) {
-    instance.libraryInfo = {
+  if (instance2.libraryInfo === void 0) {
+    instance2.libraryInfo = {
       versionedName: library.library,
       versionedNameNoSpaces: machineName + "-" + versionSplit[0] + "." + versionSplit[1],
       machineName,
@@ -3071,17 +3074,17 @@ H5P$4.newRunnable = function(library, contentId, $attachTo, skipResize, extras) 
   }
   if ($attachTo !== void 0) {
     $attachTo.toggleClass("h5p-standalone", standalone);
-    instance.attach($attachTo);
-    H5P$4.trigger(instance, "domChanged", {
+    instance2.attach($attachTo);
+    H5P$4.trigger(instance2, "domChanged", {
       "$target": $attachTo,
       "library": machineName,
       "key": "newLibrary"
     }, { "bubbles": true, "external": true });
     if (skipResize === void 0 || !skipResize) {
-      H5P$4.trigger(instance, "resize");
+      H5P$4.trigger(instance2, "resize");
     }
   }
-  return instance;
+  return instance2;
 };
 H5P$4.error = function(err) {
   if (window.console !== void 0 && console.error !== void 0) {
@@ -3149,11 +3152,11 @@ H5P$4.Dialog = function(name, title, content, $element, $returnElement) {
     }, 200);
   };
 };
-H5P$4.getCopyrights = function(instance, parameters, contentId, metadata) {
+H5P$4.getCopyrights = function(instance2, parameters, contentId, metadata) {
   var copyrights;
-  if (instance.getCopyrights !== void 0) {
+  if (instance2.getCopyrights !== void 0) {
     try {
-      copyrights = instance.getCopyrights();
+      copyrights = instance2.getCopyrights();
     } catch (err) {
     }
   }
@@ -3161,7 +3164,7 @@ H5P$4.getCopyrights = function(instance, parameters, contentId, metadata) {
     copyrights = new H5P$4.ContentCopyrights();
     H5P$4.findCopyrights(copyrights, parameters, contentId);
   }
-  var metadataCopyrights = H5P$4.buildMetadataCopyrights(metadata, instance.libraryInfo.machineName);
+  var metadataCopyrights = H5P$4.buildMetadataCopyrights(metadata, instance2.libraryInfo.machineName);
   if (metadataCopyrights !== void 0) {
     copyrights.addMediaInFront(metadataCopyrights);
   }
@@ -3241,7 +3244,7 @@ H5P$4.buildMetadataCopyrights = function(metadata) {
     return new H5P$4.MediaCopyright(dataset);
   }
 };
-H5P$4.openReuseDialog = function($element, contentData, library, instance, contentId) {
+H5P$4.openReuseDialog = function($element, contentData, library, instance2, contentId) {
   let html = "";
   if (contentData.displayOptions.export) {
     html += '<button type="button" class="h5p-big-button h5p-download-button"><div class="h5p-button-title">Download as an .h5p file</div><div class="h5p-button-description">.h5p files may be uploaded to any web-site where H5P content may be created.</div></button>';
@@ -3259,14 +3262,14 @@ H5P$4.openReuseDialog = function($element, contentData, library, instance, conte
     }).appendTo($dialog.find("h2"));
     $dialog.find(".h5p-download-button").click(function() {
       window.location.href = contentData.exportUrl;
-      instance.triggerXAPI("downloaded");
+      instance2.triggerXAPI("downloaded");
       dialog.close();
     });
     $dialog.find(".h5p-copy-button").click(function() {
       const item = new H5P$4.ClipboardItem(library);
       item.contentId = contentId;
       H5P$4.setClipboard(item);
-      instance.triggerXAPI("copied");
+      instance2.triggerXAPI("copied");
       dialog.close();
       H5P$4.attachToastTo(
         H5P$4.jQuery(".h5p-content:first")[0],
@@ -3280,13 +3283,13 @@ H5P$4.openReuseDialog = function($element, contentData, library, instance, conte
         }
       );
     });
-    H5P$4.trigger(instance, "resize");
+    H5P$4.trigger(instance2, "resize");
   }).on("dialog-closed", function() {
-    H5P$4.trigger(instance, "resize");
+    H5P$4.trigger(instance2, "resize");
   });
   dialog.open();
 };
-H5P$4.openEmbedDialog = function($element, embedCode, resizeCode, size, instance) {
+H5P$4.openEmbedDialog = function($element, embedCode, resizeCode, size, instance2) {
   var fullEmbedCode = embedCode + resizeCode;
   var dialog = new H5P$4.Dialog("embed", H5P$4.t("embed"), '<textarea class="h5p-embed-code-container" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>' + H5P$4.t("size") + ': <input aria-label="' + H5P$4.t("width") + '" type="text" value="' + Math.ceil(size.width) + '" class="h5p-embed-size"/> × <input aria-label="' + H5P$4.t("width") + '" type="text" value="' + Math.ceil(size.height) + '" class="h5p-embed-size"/> px<br/><div role="button" tabindex="0" class="h5p-expander">' + H5P$4.t("showAdvanced") + '</div><div class="h5p-expander-content"><p>' + H5P$4.t("advancedHelp") + '</p><textarea class="h5p-embed-code-container" autocorrect="off" autocapitalize="off" spellcheck="false">' + resizeCode + "</textarea></div>", $element);
   H5P$4.jQuery(dialog).on("dialog-opened", function(event, $dialog) {
@@ -3294,7 +3297,7 @@ H5P$4.openEmbedDialog = function($element, embedCode, resizeCode, size, instance
     var $scroll = $inner.find(".h5p-scroll-content");
     $scroll.outerHeight() - $scroll.innerHeight();
     var positionInner = function() {
-      H5P$4.trigger(instance, "resize");
+      H5P$4.trigger(instance2, "resize");
     };
     var $w = $dialog.find(".h5p-embed-size:eq(0)");
     var $h = $dialog.find(".h5p-embed-size:eq(1)");
@@ -3340,7 +3343,7 @@ H5P$4.openEmbedDialog = function($element, embedCode, resizeCode, size, instance
       }
     });
   }).on("dialog-closed", function() {
-    H5P$4.trigger(instance, "resize");
+    H5P$4.trigger(instance2, "resize");
   });
   dialog.open();
 };
@@ -3787,18 +3790,18 @@ if (String.prototype.trim === void 0) {
     return H5P$4.trim(this);
   };
 }
-H5P$4.trigger = function(instance, eventType, data, extras) {
-  if (instance.trigger !== void 0) {
-    instance.trigger(eventType, data, extras);
-  } else if (instance.$ !== void 0 && instance.$.trigger !== void 0) {
-    instance.$.trigger(eventType);
+H5P$4.trigger = function(instance2, eventType, data, extras) {
+  if (instance2.trigger !== void 0) {
+    instance2.trigger(eventType, data, extras);
+  } else if (instance2.$ !== void 0 && instance2.$.trigger !== void 0) {
+    instance2.$.trigger(eventType);
   }
 };
-H5P$4.on = function(instance, eventType, handler) {
-  if (instance.on !== void 0) {
-    instance.on(eventType, handler);
-  } else if (instance.$ !== void 0 && instance.$.on !== void 0) {
-    instance.$.on(eventType, handler);
+H5P$4.on = function(instance2, eventType, handler) {
+  if (instance2.on !== void 0) {
+    instance2.on(eventType, handler);
+  } else if (instance2.$ !== void 0 && instance2.$.on !== void 0) {
+    instance2.$.on(eventType, handler);
   }
 };
 H5P$4.createUUID = function() {
@@ -4146,11 +4149,11 @@ H5P$4.createTitle = function(rawTitle, maxLength) {
         if (currentTime - lastStoredOn > 250) {
           lastStoredOn = currentTime;
           for (var i = 0; i < H5P$4.instances.length; i++) {
-            var instance = H5P$4.instances[i];
-            if (instance.getCurrentState instanceof Function || typeof instance.getCurrentState === "function") {
-              var state = instance.getCurrentState();
+            var instance2 = H5P$4.instances[i];
+            if (instance2.getCurrentState instanceof Function || typeof instance2.getCurrentState === "function") {
+              var state = instance2.getCurrentState();
               if (state !== void 0) {
-                H5P$4.setUserData(instance.contentId, "state", state, { deleteOnChange: true, async: false });
+                H5P$4.setUserData(instance2.contentId, "state", state, { deleteOnChange: true, async: false });
               }
             }
           }
@@ -4328,7 +4331,7 @@ H5P$1.XAPIEvent = function() {
 };
 H5P$1.XAPIEvent.prototype = Object.create(H5P$1.Event.prototype);
 H5P$1.XAPIEvent.prototype.constructor = H5P$1.XAPIEvent;
-H5P$1.XAPIEvent.prototype.setScoredResult = function(score, maxScore, instance, completion, success) {
+H5P$1.XAPIEvent.prototype.setScoredResult = function(score, maxScore, instance2, completion, success) {
   this.data.statement.result = {};
   if (typeof score !== "undefined") {
     if (typeof maxScore === "undefined") {
@@ -4352,8 +4355,8 @@ H5P$1.XAPIEvent.prototype.setScoredResult = function(score, maxScore, instance, 
   if (typeof success !== "undefined") {
     this.data.statement.result.success = success;
   }
-  if (instance && instance.activityStartTime) {
-    var duration = Math.round((Date.now() - instance.activityStartTime) / 10) / 100;
+  if (instance2 && instance2.activityStartTime) {
+    var duration = Math.round((Date.now() - instance2.activityStartTime) / 10) / 100;
     this.data.statement.result.duration = "PT" + duration + "S";
   }
 };
@@ -4380,26 +4383,26 @@ H5P$1.XAPIEvent.prototype.getVerb = function(full) {
     return null;
   }
 };
-H5P$1.XAPIEvent.prototype.setObject = function(instance) {
-  if (instance.contentId) {
+H5P$1.XAPIEvent.prototype.setObject = function(instance2) {
+  if (instance2.contentId) {
     this.data.statement.object = {
-      "id": this.getContentXAPIId(instance),
+      "id": this.getContentXAPIId(instance2),
       "objectType": "Activity",
       "definition": {
         "extensions": {
-          "http://h5p.org/x-api/h5p-local-content-id": instance.contentId
+          "http://h5p.org/x-api/h5p-local-content-id": instance2.contentId
         }
       }
     };
-    if (instance.subContentId) {
-      this.data.statement.object.definition.extensions["http://h5p.org/x-api/h5p-subContentId"] = instance.subContentId;
-      if (typeof instance.getTitle === "function") {
+    if (instance2.subContentId) {
+      this.data.statement.object.definition.extensions["http://h5p.org/x-api/h5p-subContentId"] = instance2.subContentId;
+      if (typeof instance2.getTitle === "function") {
         this.data.statement.object.definition.name = {
-          "en-US": instance.getTitle()
+          "en-US": instance2.getTitle()
         };
       }
     } else {
-      var content = H5P$1.getContentForInstance(instance.contentId);
+      var content = H5P$1.getContentForInstance(instance2.contentId);
       if (content && content.metadata && content.metadata.title) {
         this.data.statement.object.definition.name = {
           "en-US": H5P$1.createTitle(content.metadata.title)
@@ -4412,26 +4415,26 @@ H5P$1.XAPIEvent.prototype.setObject = function(instance) {
     };
   }
 };
-H5P$1.XAPIEvent.prototype.setContext = function(instance) {
-  if (instance.parent && (instance.parent.contentId || instance.parent.subContentId)) {
+H5P$1.XAPIEvent.prototype.setContext = function(instance2) {
+  if (instance2.parent && (instance2.parent.contentId || instance2.parent.subContentId)) {
     this.data.statement.context = {
       "contextActivities": {
         "parent": [
           {
-            "id": this.getContentXAPIId(instance.parent),
+            "id": this.getContentXAPIId(instance2.parent),
             "objectType": "Activity"
           }
         ]
       }
     };
   }
-  if (instance.libraryInfo) {
+  if (instance2.libraryInfo) {
     if (this.data.statement.context === void 0) {
       this.data.statement.context = { "contextActivities": {} };
     }
     this.data.statement.context.contextActivities.category = [
       {
-        "id": "http://h5p.org/libraries/" + instance.libraryInfo.versionedNameNoSpaces,
+        "id": "http://h5p.org/libraries/" + instance2.libraryInfo.versionedNameNoSpaces,
         "objectType": "Activity"
       }
     ];
@@ -4471,12 +4474,12 @@ H5P$1.XAPIEvent.prototype.getMaxScore = function() {
 H5P$1.XAPIEvent.prototype.getScore = function() {
   return this.getVerifiedStatementValue(["result", "score", "raw"]);
 };
-H5P$1.XAPIEvent.prototype.getContentXAPIId = function(instance) {
+H5P$1.XAPIEvent.prototype.getContentXAPIId = function(instance2) {
   var xAPIId;
-  if (instance.contentId && H5PIntegration && H5PIntegration.contents && H5PIntegration.contents["cid-" + instance.contentId]) {
-    xAPIId = H5PIntegration.contents["cid-" + instance.contentId].url;
-    if (instance.subContentId) {
-      xAPIId += "?subContentId=" + instance.subContentId;
+  if (instance2.contentId && H5PIntegration && H5PIntegration.contents && H5PIntegration.contents["cid-" + instance2.contentId]) {
+    xAPIId = H5PIntegration.contents["cid-" + instance2.contentId].url;
+    if (instance2.subContentId) {
+      xAPIId += "?subContentId=" + instance2.subContentId;
     }
   }
   return xAPIId;
@@ -4888,7 +4891,7 @@ H5P.OfflineRequestQueue = function(RequestQueue, Dialog) {
     let isAttached = false;
     let isShowing = false;
     let isLoading = false;
-    const instance = options.instance;
+    const instance2 = options.instance;
     const offlineDialog = new Dialog({
       headerText: H5P.t("offlineDialogHeader"),
       dialogText: H5P.t("offlineDialogBody"),
@@ -4896,7 +4899,7 @@ H5P.OfflineRequestQueue = function(RequestQueue, Dialog) {
       hideCancel: true,
       hideExit: true,
       classes: ["offline"],
-      instance,
+      instance: instance2,
       skipRestoreFocus: true
     });
     const dialog = offlineDialog.getElement();
@@ -5229,9 +5232,7 @@ H5P.getPath = function(path, contentId) {
   return prefix + "/" + path;
 };
 `;
-const frameStyle = `/* Import common fonts */
-/*@import 'font-open-sans.css';*/
-/* General CSS for H5P. Licensed under the MIT License.*/
+const frameStyle = `/* General CSS for H5P. Licensed under the MIT License.*/
 /* Custom H5P font to use for icons. */
 @font-face {
   font-family: 'h5p';
@@ -5243,6 +5244,7 @@ const frameStyle = `/* Import common fonts */
   font-weight: normal;
   font-style: normal;
 }
+
 @font-face {
   font-family: 'h5p-hub-publish';
   src: url('data:application/vnd.ms-fontobject;base64,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');
@@ -5254,6 +5256,7 @@ const frameStyle = `/* Import common fonts */
   font-style: normal;
   font-display: block;
 }
+
 html.h5p-iframe, html.h5p-iframe > body {
   font-family: Sans-Serif; /* Use the browser's default sans-serif font. (Since Heletica doesn't look nice on Windows, and Arial on OS X.) */
   width: 100%;
@@ -5318,6 +5321,7 @@ body.h5p-semi-fullscreen {
   height: 100%;
   background-color: #FFF;
 }
+
 .h5p-content-controls {
   margin: 0;
   position: absolute;
@@ -5328,9 +5332,11 @@ body.h5p-semi-fullscreen {
 .h5p-fullscreen .h5p-content-controls {
   display: none;
 }
+
 .h5p-content-controls > a:link, .h5p-content-controls > a:visited, a.h5p-disable-fullscreen:link, a.h5p-disable-fullscreen:visited {
   color: #e5eef6;
 }
+
 .h5p-enable-fullscreen:before {
   font-family: 'H5P';
   content: "\\e88c";
@@ -5355,18 +5361,21 @@ body.h5p-semi-fullscreen {
   width: 1.1em;
   height: 0.9em;
 }
+
 .h5p-enable-fullscreen:focus,
 .h5p-disable-fullscreen:focus {
   outline-style: solid;
   outline-width: 1px;
   outline-offset: 0.25em;
 }
+
 .h5p-enable-fullscreen:hover, .h5p-disable-fullscreen:hover {
   background: rgba(0,0,0,0.5);
 }
 .h5p-semi-fullscreen .h5p-enable-fullscreen {
   display: none;
 }
+
 div.h5p-fullscreen {
   width: 100%;
   height: 100%;
@@ -5375,11 +5384,13 @@ div.h5p-fullscreen {
   width: auto;
   height: auto;
 }
+
 .h5p-fullscreen .h5p-iframe-wrapper,
 .h5p-semi-fullscreen .h5p-iframe-wrapper {
   width: 100%;
   height: 100%;
 }
+
 .h5p-iframe-wrapper.h5p-semi-fullscreen {
   width: auto;
   height: auto;
@@ -5409,6 +5420,7 @@ div.h5p-fullscreen {
   border: 0;
   display: block;
 }
+
 .h5p-content ul.h5p-actions {
   box-sizing: border-box;
   -moz-box-sizing: border-box;
@@ -5810,6 +5822,8 @@ div.h5p-fullscreen {
   white-space: pre;
   overflow: auto;
 }
+
+
 /* This is loaded as part of Core and not Editor since this needs to be outside the editor iframe */
 .h5peditor-semi-fullscreen {
   width: 100%;
@@ -5825,26 +5839,32 @@ iframe.h5peditor-semi-fullscreen {
   background: #fff;
   z-index: 100001;
 }
+
 .h5p-content.using-mouse *:not(textarea):focus {
   outline: none !important;
 }
+
 .h5p-content-hub-button:before {
   font-family: "h5p";
   margin-right: 0.5em;
   font-size: 0.7em;
   line-height: 1;
 }
+
 .h5p-content-hub-button.unpublish:before {
   content: "\\e916";
 }
+
 .h5p-content-hub-button.waiting:before,
 .h5p-content-hub-button.sync:before {
   content: "\\e917";
 }
+
 .h5p-content-hub-button.waiting:before {
   display: inline-block;
   animation: rotate 2s linear infinite;
 }
+
 @keyframes rotate {
   to {
     transform: rotate(360deg);
@@ -6411,7 +6431,7 @@ const __vue2_script = {
     ${contentStyles}
     <style>${this.css}</style>
     <script>H5PIntegration = ${JSON.stringify(h5pIntegration)};var H5P = H5P || {};H5P.externalEmbed = true;${endScript}
-    <script>${frameScript}${endScript}
+    <script>${frameScript.replace('use "strict";', "")}${endScript}
     ${contentScripts}
   </head>
   <body>
