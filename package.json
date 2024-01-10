@@ -6,12 +6,12 @@
     "url": "https://github.com/technowledgy/vue-h5p/issues"
   },
   "scripts": {
-    "build": "yarn build:frame && vite build",
+    "build": "\"$npm_execpath\" run build:frame && vite build",
     "build:frame": "vite build --mode frame",
     "lint": "eslint --max-warnings=0 --ext .js --ext .vue .",
-    "pre-version": "yarn test && yarn lint && yarn build",
+    "pre-version": "\"$npm_execpath\" test && \"$npm_execpath\" lint && \"$npm_execpath\" run build",
     "release": "release-it",
-    "serve": "yarn build:frame && vite",
+    "serve": "\"$npm_execpath\" run build:frame && vite",
     "test": "jest"
   },
   "files": [

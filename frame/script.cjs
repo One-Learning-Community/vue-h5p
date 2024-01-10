@@ -3628,6 +3628,26 @@ H5P$4.cloneObject = function(object, recursive) {
 H5P$4.trim = function(value) {
   return value.replace(/^\s+|\s+$/g, "");
 };
+H5P$4.isEmpty = (value) => {
+  if (!value && value !== 0 && value !== false) {
+    return true;
+  } else if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      if (!H5P$4.isEmpty(value[i])) {
+        return false;
+      }
+    }
+    return true;
+  } else if (typeof value === "object") {
+    for (let prop in value) {
+      if (value.hasOwnProperty(prop) && !H5P$4.isEmpty(value[prop])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+};
 H5P$4.jsLoaded = function(path) {
   H5PIntegration.loadedJs = H5PIntegration.loadedJs || [];
   return H5P$4.jQuery.inArray(path, H5PIntegration.loadedJs) !== -1;
