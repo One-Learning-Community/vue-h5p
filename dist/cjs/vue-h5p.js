@@ -6433,7 +6433,7 @@ const __vue2_script = {
     ${contentStyles}
     <style>${this.css}</style>
     <script>H5PIntegration = ${JSON.stringify(h5pIntegration)};var H5P = H5P || {};H5P.externalEmbed = true;${endScript}
-    <script>${frameScript.replace('use "strict";', "")}${endScript}
+    <script>${frameScript.replace('"use strict";', "")}${endScript}
     ${contentScripts}
   </head>
   <body>
