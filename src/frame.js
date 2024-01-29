@@ -16,7 +16,12 @@ import 'h5p/js/h5p-action-bar'
 import 'h5p/js/h5p-tooltip.js'
 
 H5P.getLibraryPath = function (library) {
-  return H5PIntegration._libraryPaths[library]
+  library = H5PIntegration._libraryPaths[library] || library;
+  if (H5PIntegration.urlLibraries !== void 0) {
+    return H5PIntegration.urlLibraries + '/' + library;
+  } else {
+    return H5PIntegration.url + '/libraries/' + library;
+  }
 }
 
 H5P.getPath = function (path, contentId) {

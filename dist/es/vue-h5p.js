@@ -5212,7 +5212,12 @@ H5P.Tooltip = function() {
 }();
 H5P.Tooltip.uniqueId = -1;
 H5P.getLibraryPath = function(library) {
-  return H5PIntegration._libraryPaths[library];
+  library = H5PIntegration._libraryPaths[library] || library;
+  if (H5PIntegration.urlLibraries !== void 0) {
+    return H5PIntegration.urlLibraries + "/" + library;
+  } else {
+    return H5PIntegration.url + "/libraries/" + library;
+  }
 };
 H5P.getPath = function(path, contentId) {
   const hasProtocol = function(path2) {
