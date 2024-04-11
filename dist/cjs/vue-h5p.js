@@ -2975,6 +2975,20 @@ H5P$4.fullScreen = function($element, instance2, exitCallback, body, forceSemiFu
     if (H5PIntegration.crossorigin && !hasProtocol(source.path)) {
       return H5PIntegration.crossorigin;
     }
+    if (H5PIntegration.crossorigin && H5P$4.crossOriginalInAllowedList()) {
+      return H5PIntegration.crossorigin;
+    }
+  };
+  H5P$4.crossOriginalInAllowedList = function(source) {
+    if (!H5PIntegration.crossoriginAllowedDomains || !Array.isArray(H5PIntegration.crossoriginAllowedDomains)) {
+      return false;
+    }
+    if (H5PIntegration.crossoriginAllowedDomains[0] === "*") {
+      return true;
+    }
+    return H5PIntegration.crossoriginAllowedDomains.some(function(domain) {
+      return source.path.startsWith("https://" + domain);
+    });
   };
   H5P$4.getPath = function(path, contentId) {
     if (hasProtocol(path)) {
