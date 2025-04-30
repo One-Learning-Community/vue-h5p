@@ -6356,7 +6356,10 @@ const __vue2_script = {
   async mounted() {
     var _a, _b, _c;
     this.onMessage = (evt) => {
+      var _a2;
       if (evt.data.context !== "h5p")
+        return;
+      if (evt.source !== ((_a2 = this.$refs.iframe) == null ? void 0 : _a2.contentWindow))
         return;
       if (evt.data.action === "hello") {
         this.$refs.iframe.contentWindow.H5P.externalDispatcher.on("*", (ev) => {
