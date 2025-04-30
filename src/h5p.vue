@@ -111,6 +111,8 @@ export default {
     this.onMessage = evt => {
       if (evt.data.context !== 'h5p') return
 
+      if (evt.source !== this.$refs.iframe?.contentWindow) return
+
       if (evt.data.action === 'hello') {
         this.$refs.iframe.contentWindow.H5P.externalDispatcher.on('*', (ev) => {
           this.$emit(ev.type.toLowerCase(), ev.data)
