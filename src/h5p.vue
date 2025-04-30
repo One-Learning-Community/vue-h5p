@@ -82,6 +82,9 @@ export default {
       type: Object,
       default: null,
       validator: (val) => val ? ['mail,name', 'homePage,name'].includes(Object.keys(val).sort().join(',')) : true
+    },
+    configureLibraries: {
+      type: Function
     }
   },
   data () {
@@ -190,6 +193,10 @@ export default {
     }
 
     const { styles, scripts } = this.sortDependencies(libraries)
+
+    if (this.configureLibraries) {
+      await this.configureLibraries(h5pIntegration, styles, scripts);
+    }
 
     // workaround for vue-loader parsing this as the end of our SFC's script block
     const endScript = '</' + 'script>'

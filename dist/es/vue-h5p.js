@@ -6339,6 +6339,9 @@ const __vue2_script = {
       type: Object,
       default: null,
       validator: (val) => val ? ["mail,name", "homePage,name"].includes(Object.keys(val).sort().join(",")) : true
+    },
+    configureLibraries: {
+      type: Function
     }
   },
   data() {
@@ -6442,6 +6445,9 @@ const __vue2_script = {
       ...this.integration
     };
     const { styles, scripts } = this.sortDependencies(libraries);
+    if (this.configureLibraries) {
+      await this.configureLibraries(h5pIntegration, styles, scripts);
+    }
     const endScript = "<\/script>";
     const contentStyles = styles.map((style) => `<link rel="stylesheet" href="${style}">`).join("\n");
     const contentScripts = scripts.map((script) => `<script src="${script}">${endScript}`).join("\n");
